@@ -3,11 +3,9 @@ import pandas as pd
 import re
 from pyfaidx import Fasta
 
-#输入文件名字,返回文件行数
 def countFileLine(fileName):
     return sum(1 for _ in open(fileName))
 
-#提取gtf文件中所有标签为'gene_name'的集合
 def gtfGetGeneNameSet(gtfFileName):
     geneNameSet = defaultdict(int)
     for line in open(gtfFileName,'r'):

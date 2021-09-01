@@ -16,7 +16,6 @@ overMaxSameP = 0.8
 maxTransSpan = 30000
 splitGeneSet = defaultdict(int)
 spg2trans = defaultdict(list)
-#临时添加供临时使用,只能小批量查询
 def getTranscriptFlncNum(trans):
     if 'transcript' in trans:
         return 2
@@ -55,7 +54,8 @@ for gene in gene2transBainfo:
                     overlapMin(tmpList[i], tmpList[j]) <= overMinSameP and \
                     overlapA(tmpList[i], tmpList[j]) >= overMaxSameP:
                 maxSameNum = maxSameNum + 1
-        #判断第i个tanscript有没有可能成为分裂纠正的证据transcript,要求他尽可能完整,尽可能长,并且没有第三方连接证据
+	#Test if the i_th transcript can be the representative transcript of the splited transcripts set
+	#It should be as long, as complete as possible
         if diffNum > 0 and maxSameNum == 0:
             if 'PS' in gene and len(gene) == 11:
                 splitF = True
@@ -121,7 +121,7 @@ with open('data/splitGene.list.txt', 'w') as of:
 #         if len(spg2trans[gene])<2:
 #             continue
 #         print(gene, file=of)
-#输出供断点分析
+#Output break points
 for gene in gene2transBainfo:
     for i in gene2transBainfo[gene]:
         trans2Bainfo[i.trans]=i
