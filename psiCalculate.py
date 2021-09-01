@@ -1,6 +1,5 @@
 import os
 from collections import defaultdict
-'''
 with open('../data/total_RI_strict.ioe','r') as f,\
      open('../data/ri.gff','w') as of:
     line=f.readline()
@@ -22,7 +21,6 @@ with open('../data/total_RI_strict.ioe','r') as f,\
         ed=int(info[1])-1
         print(chrm,'dexseq_prepare_annotation.py\texonic_part',st,ed,'.',strand,'.',gene+':'+chrm+':'+str(st)+':'+str(ed),sep='\t',file=of)
 os.system("sort -u -k9,9 ../data/ri.gff | sort -k1,1 -k4,4n  >../data/ri.sorted.gff && rm ../data/ri.gff")
-'''
 tissues=['S1','S2','S3','S4','S5','S6','S7']
 for tis in tissues:
     os.system("bamToBed -i ../../2nd_read/lqs/sdata/%s.bam -cigar | /home/xutun/software/filterSamFile/bin/bedToJunction - | awk 'BEGIN{OFS=\"\\t\"}{print $1,$2,$3,$4,$5,$6}' | sort -k1,1 -k2,2n >../data/%s.intron.bed "%(tis,tis))
