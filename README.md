@@ -1,6 +1,6 @@
 # opium_poppy_isoseq
 ## Processed isoforms are located under data.
 ## Requirements for psiCalculate.py
-bamToBed, bedtools are needed.
+bamToBed and bedtools are needed.
 ## Requirements for mergeGeneDetect.py
-pyfaidx, pandas are needed.
+pyfaidx and pandas are needed.
