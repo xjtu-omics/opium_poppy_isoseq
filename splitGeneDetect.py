@@ -6,9 +6,7 @@ sys.path.append('/data/home/xutun/mySrc/modifyPoppyPaper')
 from ttlib.basicInfo import overlapA, overlapMax, overlapMin, bainfo
 from ttlib.ttDataStructure import ttUFS
 from getUse import getGene2transBainfoList
-print('a')
 gene2transBainfo = getGene2transBainfoList()
-print('b')
 trans2Bainfo = defaultdict(bainfo)
 overMaxDiffP = 0.2
 overMinSameP = 0.8
