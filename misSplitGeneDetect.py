@@ -1,127 +1,131 @@
-import pandas as pd
-from collections import defaultdict
-from pyfaidx import Faidx
 import sys
+import os
+from collections import defaultdict
+sys.path.append('/data/home/xutun/mySrc')
 sys.path.append('/data/home/xutun/mySrc/modifyPoppyPaper')
-from getUse import dd,classF
+from ttlib.basicInfo import overlapA, overlapMax, overlapMin, bainfo
+from ttlib.ttDataStructure import ttUFS
+from getUse import getGene2transBainfoList
+gene2transBainfo = getGene2transBainfoList()
+trans2Bainfo = defaultdict(bainfo)
+overMaxDiffP = 0.2
+overMinSameP = 0.8
+overMaxSameP = 0.8
+maxTransSpan = 30000
+splitGeneSet = defaultdict(int)
+spg2trans = defaultdict(list)
+def getTranscriptFlncNum(trans):
+    if 'transcript' in trans:
+        return 2
+        # return int(os.popen('grep "^%s," ../data/merged.polished.cluster_report.csv|wc -l'%(trans)).readline())
+    else:
+        return 1
 
-annotDiamondF = f'{dd}/isoseqDiamondAnnot.prot.diamond'
-transProtFa = f'{dd}/total.merge_corrected.faa'
-annotProtFa = f'{dd}/ref/poppy_v6.proteins.final_revised.fasta'
-toMergeGeneF = f'{dd}/toMergeGene.tab'
-
-classD = pd.read_table(classF,sep='\t')
-
-candidateTransSet = defaultdict(list)
-trans2annotDiamondSet = defaultdict(lambda:defaultdict(int))
-transProtFaHandle = Faidx(transProtFa)
-annotProtFaHandle = Faidx(annotProtFa)
-resultTrans2protLen = defaultdict(int)
-
-
-def isMerge(gene):
-    gene = gene.split('_')
-    if len(gene)>=2:
-        if len(gene[0])==11 and len(gene[1])==11:
-            if 'PS' in gene[0] and 'PS' in gene[1]:
-                return True
-    return False
-
-def getTrans2gene():
-    trans2gene = defaultdict(int)
-    for ind,row in classD.iterrows():
-        trans2gene[row['isoform']] = row['associated_gene']
-    return trans2gene
-
-def getCandidateCatTransSet():
-    transSet = defaultdict(list)
-    for ind,row in classD.iterrows():
-        if row['coding'] != 'coding':
+for gene in gene2transBainfo:
+    print(gene)
+    tmpList = gene2transBainfo[gene]
+    length = len(tmpList)
+    totalAbNum = 0
+    chrom = tmpList[0].chr
+    breakPosList = list()
+    splitF = False
+    for i in range(length):
+        diffNum = 0
+        maxSameNum = 0
+        if tmpList[i].ed - tmpList[i].st + 1 >= maxTransSpan:
             continue
-        gene = row['associated_gene']
-        trans = row['isoform']
-        if isMerge(gene):
-            transSet[trans] = gene.split('_')
-    return transSet
+        for j in range(i + 1, length):
+            if tmpList[j].ed - tmpList[j].st + 1 >= maxTransSpan:
+                continue
+            if overlapMax(tmpList[i], tmpList[j]) <= overMaxDiffP:
+                findContact = False
+                for k in range(length):
+                    if k == i or k == j:
+                        continue
+                    if overlapA(tmpList[i], tmpList[k]) >= 0.9 and \
+                            overlapA(tmpList[j], tmpList[k]) >= 0.9:
+                        findContact = True
+                        break
+                if not findContact:
+                    diffNum = diffNum + 1
+            if overlapMax(tmpList[i], tmpList[j]) >= overMaxSameP and \
+                    overlapMin(tmpList[i], tmpList[j]) <= overMinSameP and \
+                    overlapA(tmpList[i], tmpList[j]) >= overMaxSameP:
+                maxSameNum = maxSameNum + 1
+	#Test if the i_th transcript can be the representative transcript of the splited transcripts set
+	#It should be as long, as complete as possible
+        if diffNum > 0 and maxSameNum == 0:
+            if 'PS' in gene and len(gene) == 11:
+                splitF = True
+                break
+    if not splitF:
+        continue
+    gtus = ttUFS(length+1)
+    mgtu2MaxLen = [ tmpList[i].ed - tmpList[i].st + 1 for i in range(length) ]
+    mgtu2MaxId = [i for i in range(length)]
+    mgtu2TransNum=[getTranscriptFlncNum(tmpList[i].trans) for i in range(length)]
+    for i in range(length):
+        if tmpList[i].ed - tmpList[i].st + 1 >= maxTransSpan:
+            continue
+        for j in range(i + 1, length):
+            if tmpList[j].ed - tmpList[j].st + 1 >= maxTransSpan:
+                continue
+            ir=gtus.find_set(i+1)-1
+            jr=gtus.find_set(j+1)-1
+            if overlapMax(tmpList[mgtu2MaxId[ir]],tmpList[mgtu2MaxId[jr]]) >=0.5:
+                gtus.union(i+1, j+1)
+                nid=0
+                if mgtu2MaxLen[ir]>mgtu2MaxLen[jr]:
+                    nid=mgtu2MaxId[ir]
+                else:
+                    nid=mgtu2MaxId[jr]
+                nlen=max(mgtu2MaxLen[ir],mgtu2MaxLen[jr])
+                mgtu2MaxLen[ir]=mgtu2MaxLen[jr]=nlen
+                mgtu2MaxId[ir]=mgtu2MaxId[jr]=nid
+                tmpTransNum=mgtu2TransNum[ir]+mgtu2TransNum[jr]
+                mgtu2TransNum[ir]=mgtu2TransNum[jr]=tmpTransNum
+    gtu2len = defaultdict(int)
+    gtu2ind = defaultdict(int)
+    for i in range(length):
+        if tmpList[i].ed - tmpList[i].st + 1 >= maxTransSpan:
+            continue
+        gtu = gtus.find_set(i+1)
+        tmpLen = tmpList[i].ed - tmpList[i].st + 1
+        if gtu2len[gtu] < tmpLen:
+            gtu2len[gtu] = tmpLen
+            gtu2ind[gtu] = i
+    splitGeneSet[gene] = 1
+    for gtu in gtu2ind:
+        if mgtu2TransNum[gtu-1]>1:
+            spg2trans[gene].append(tmpList[gtu2ind[gtu]].trans)
 
-def getTrans2AnnotDiamondSet():
-    trans2diamondSet = defaultdict(lambda: defaultdict(int))
-    for line in open(annotDiamondF):
-        line = line.split('\t')
-        trans2diamondSet[line[0]][line[1]] = 1
-    return trans2diamondSet
+# with open('data/spgPlot.dat', 'w') as of:
+#     for gene in splitGeneSet:
+#         if len(spg2trans[gene])<2:
+#             continue
+#         for trans in spg2trans[gene]:
+#             print(gene, trans, sep='\t', file=of)
 
-candidateTransSet = getCandidateCatTransSet()
-trans2annotDiamondSet = getTrans2AnnotDiamondSet()
-trans2gene = getTrans2gene()
-relMergeGene2protLen = defaultdict(int)
-relMergeGene2trans = defaultdict(str)
-
-for trans in candidateTransSet:
-    allInclude = True
-    for gene in candidateTransSet[trans]:
-        if gene not in trans2annotDiamondSet[trans]:
-            allInclude = False
-            break
-    # if not allInclude:
-    #     continue
-    allLonger = True
-    for gene in candidateTransSet[trans]:
-        if transProtFaHandle.index[trans].rlen <= annotProtFaHandle.index[gene].rlen:
-            allLonger = False
-            break
-    # if not allLonger:
-    #     continue
-    gene = trans2gene[trans]
-    if gene not in relMergeGene2protLen or \
-       relMergeGene2protLen[gene] < transProtFaHandle.index[trans].rlen:
-        relMergeGene2protLen[gene] = transProtFaHandle.index[trans].rlen
-        relMergeGene2trans[gene] = trans
-
-with open(toMergeGeneF,'w') as of:
-    for gene in relMergeGene2trans:
-        print(gene,relMergeGene2trans[gene],sep='\t',file=of)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+with open('data/splitGene.list.txt', 'w') as of:
+    for gene in splitGeneSet:
+        if len(spg2trans[gene])<2:
+            continue
+        print(gene, end='\t', file=of)
+        for trans in spg2trans[gene]:
+            print(trans, end='\t', file=of)
+        print('', file=of)
+# with open('data/spgGene.list', 'w') as of:
+#     for gene in splitGeneSet:
+#         if len(spg2trans[gene])<2:
+#             continue
+#         print(gene, file=of)
+#Output break points
+for gene in gene2transBainfo:
+    for i in gene2transBainfo[gene]:
+        trans2Bainfo[i.trans]=i
+with open('data/detect2breakSta.dat','w') as of:
+    for gene in splitGeneSet:
+        if len(spg2trans[gene])==2 and overlapMax(trans2Bainfo[spg2trans[gene][0]],trans2Bainfo[spg2trans[gene][1]])==0:
+            bainfo1=trans2Bainfo[spg2trans[gene][0]]
+            bainfo2=trans2Bainfo[spg2trans[gene][1]]
+            print(gene,spg2trans[gene][0],spg2trans[gene][1],bainfo1.chr,min(bainfo1.ed,bainfo2.ed),max(bainfo1.st,bainfo2.st),sep='\t',file=of)
